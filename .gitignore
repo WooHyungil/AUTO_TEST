@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+*.egg-info/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Logs and runtime artifacts
+*.log
+logs/
+reports/
+runtime/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
