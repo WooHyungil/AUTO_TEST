@@ -560,6 +560,36 @@ export function DashboardPage() {
     setCaseValidationErrors([]);
   }
 
+  function applyAiPromptTemplate(templateKey) {
+    const templates = {
+      loginCenter: {
+        behavior: "앱 정가운데에 있는 로그인 버튼을 누른다.",
+        expected: "로그인 성공 후 Welcome 텍스트가 화면에 표시된다.",
+        constraints: "Steps 형식으로만 응답하고 wait/tap/expect를 포함한다."
+      },
+      vehicleStatus: {
+        behavior: "메인 화면에서 차량 상태 메뉴를 선택해 상세 화면으로 이동한다.",
+        expected: "Vehicle Status 또는 차량 상태 관련 텍스트가 표시된다.",
+        constraints: "로딩 대기(wait)를 포함하고 접근성 라벨 기반 tap을 우선 사용한다."
+      },
+      settingsOpen: {
+        behavior: "홈 화면 우측 상단 설정 아이콘을 눌러 설정 화면으로 진입한다.",
+        expected: "Settings 텍스트 또는 설정 메뉴 리스트가 표시된다.",
+        constraints: "불안정한 xpath 대신 accessibility 또는 id를 우선 사용한다."
+      }
+    };
+
+    const selected = templates[templateKey];
+    if (!selected) {
+      return;
+    }
+
+    setAiBehaviorText(selected.behavior);
+    setAiExpectedText(selected.expected);
+    setAiExtraConstraints(selected.constraints);
+    showToast("AI 템플릿 적용 완료", "success");
+  }
+
   function handleGenerateAiPrompt() {
     const prompt = [
       "당신은 모바일 자동화 테스트 케이스 작성 전문가입니다.",
@@ -877,6 +907,18 @@ export function DashboardPage() {
               <option>Kotlin (Appium)</option>
               <option>Steps only (현재 대시보드용)</option>
             </select>
+            <label>빠른 템플릿</label>
+            <div className="template-row ai-template-row">
+              <button type="button" onClick={() => applyAiPromptTemplate("loginCenter")}>
+                중앙 로그인 버튼
+              </button>
+              <button type="button" onClick={() => applyAiPromptTemplate("vehicleStatus")}>
+                차량 상태 화면
+              </button>
+              <button type="button" onClick={() => applyAiPromptTemplate("settingsOpen")}>
+                설정 화면 진입
+              </button>
+            </div>
             <label>동작 설명 (한글)</label>
             <textarea
               rows={3}

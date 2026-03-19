@@ -192,6 +192,18 @@ label {
   margin: 10px 0;
 }
 
+.ai-template-row {
+  margin: 4px 0 6px;
+  flex-wrap: wrap;
+}
+
+.ai-template-row button {
+  background: #eef9f4;
+  border-color: #b7ddcf;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
 .device-manager {
   background: #f4faf7;
   border: 1px solid var(--border);
