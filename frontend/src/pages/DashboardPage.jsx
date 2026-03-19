@@ -65,6 +65,14 @@ export function DashboardPage() {
     "wait:1500\ntap:accessibility=Login\nexpect:text=Welcome"
   );
   const [caseValidationErrors, setCaseValidationErrors] = useState([]);
+  const [aiCodeLanguage, setAiCodeLanguage] = useState("Python (Appium)");
+  const [aiBehaviorText, setAiBehaviorText] = useState("앱 정가운데 로그인 버튼을 누른다.");
+  const [aiExpectedText, setAiExpectedText] = useState("로그인 성공 후 Welcome 텍스트가 보여야 한다.");
+  const [aiExtraConstraints, setAiExtraConstraints] = useState(
+    "응답은 Steps 라인만 제공하고 설명은 제외한다."
+  );
+  const [aiGeneratedPrompt, setAiGeneratedPrompt] = useState("");
+  const [aiResponseSteps, setAiResponseSteps] = useState("");
   const refreshTimerRef = useRef(null);
   const taskListRef = useRef(null);
   const [taskScrollTop, setTaskScrollTop] = useState(0);
@@ -552,6 +560,75 @@ export function DashboardPage() {
     setCaseValidationErrors([]);
   }
 
+  function handleGenerateAiPrompt() {
+    const prompt = [
+      "당신은 모바일 자동화 테스트 케이스 작성 전문가입니다.",
+      `코드 언어: ${aiCodeLanguage}`,
+      "목표: 아래 동작과 기대 결과를 만족하는 테스트 케이스를 생성하세요.",
+      `동작 설명: ${aiBehaviorText.trim()}`,
+      `기대 결과: ${aiExpectedText.trim()}`,
+      `추가 조건: ${aiExtraConstraints.trim()}`,
+      "출력 형식:",
+      "1) Title 한 줄",
+      "2) Expected 한 줄",
+      "3) Steps만 여러 줄",
+      "Steps 문법 예시:",
+      "wait:1500",
+      "tap:accessibility=Login",
+      "input:id=com.example:id/email|text=user01",
+      "expect:text=Welcome",
+      "코드블록 마크다운(``` )은 사용하지 마세요."
+    ].join("\n");
+    setAiGeneratedPrompt(prompt);
+    showToast("AI 질문 프롬프트 생성 완료", "success");
+  }
+
+  async function handleCopyAiPrompt() {
+    if (!aiGeneratedPrompt.trim()) {
+      showToast("먼저 프롬프트를 생성하세요", "warn");
+      return;
+    }
+    await navigator.clipboard.writeText(aiGeneratedPrompt);
+    showToast("프롬프트 복사 완료", "success");
+  }
+
+  function handleApplyAiResponseToCase() {
+    if (!aiResponseSteps.trim()) {
+      showToast("AI 응답을 붙여넣어 주세요", "warn");
+      return;
+    }
+    const cleaned = aiResponseSteps
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line && line !== "```" && !line.startsWith("```"));
+
+    const titleLine = cleaned.find((line) => line.toLowerCase().startsWith("title:"));
+    const expectedLine = cleaned.find((line) => line.toLowerCase().startsWith("expected:"));
+    const stepLines = cleaned.filter(
+      (line) =>
+        line.startsWith("wait:") ||
+        line.startsWith("tap:") ||
+        line.startsWith("input:") ||
+        line.startsWith("expect:")
+    );
+
+    if (titleLine) {
+      setCaseTitle(titleLine.split(":").slice(1).join(":").trim());
+    }
+    if (expectedLine) {
+      setCaseExpected(expectedLine.split(":").slice(1).join(":").trim());
+    }
+    if (stepLines.length > 0) {
+      setCaseStepsText(stepLines.join("\n"));
+      setCaseValidationErrors([]);
+      showToast("AI 응답을 Case Builder에 반영했습니다", "success");
+      return;
+    }
+
+    setCaseValidationErrors(["AI 응답에서 유효한 Steps를 찾지 못했습니다."]);
+    showToast("유효한 Steps가 없어 반영되지 않았습니다", "error");
+  }
+
   async function handleLogin() {
     await login(username, "password");
     await loadAll();
@@ -786,6 +863,62 @@ export function DashboardPage() {
       </section>
 
       <section className="grid main-grid">
+        <div className="card ai-prompt-card">
+          <h3>AI 질문 입력 폼</h3>
+          <div className="hint">
+            동작/기대결과를 한글로 적고 프롬프트를 생성해 AI에 그대로 질문하세요.
+          </div>
+          <div className="case-form">
+            <label>코드 언어</label>
+            <select value={aiCodeLanguage} onChange={(e) => setAiCodeLanguage(e.target.value)}>
+              <option>Python (Appium)</option>
+              <option>JavaScript (WebdriverIO)</option>
+              <option>Java (Appium)</option>
+              <option>Kotlin (Appium)</option>
+              <option>Steps only (현재 대시보드용)</option>
+            </select>
+            <label>동작 설명 (한글)</label>
+            <textarea
+              rows={3}
+              value={aiBehaviorText}
+              onChange={(e) => setAiBehaviorText(e.target.value)}
+              placeholder="예: 앱 정가운데 로그인 버튼을 누른다."
+            />
+            <label>기대 결과 (한글)</label>
+            <textarea
+              rows={3}
+              value={aiExpectedText}
+              onChange={(e) => setAiExpectedText(e.target.value)}
+              placeholder="예: 로그인 성공 후 Welcome 문구가 보인다."
+            />
+            <label>추가 조건 (선택)</label>
+            <textarea
+              rows={2}
+              value={aiExtraConstraints}
+              onChange={(e) => setAiExtraConstraints(e.target.value)}
+              placeholder="예: 실패 가능성을 줄이기 위해 wait을 적절히 포함"
+            />
+          </div>
+          <div className="buttons">
+            <button onClick={handleGenerateAiPrompt}>프롬프트 생성</button>
+            <button onClick={handleCopyAiPrompt}>복사</button>
+          </div>
+          <label>생성된 질문 (AI에 그대로 붙여넣기)</label>
+          <textarea rows={10} value={aiGeneratedPrompt} readOnly />
+          <label>AI 응답 붙여넣기 (Title/Expected/Steps)</label>
+          <textarea
+            rows={8}
+            value={aiResponseSteps}
+            onChange={(e) => setAiResponseSteps(e.target.value)}
+            placeholder="AI가 준 답변을 붙여넣으세요"
+          />
+          <div className="buttons">
+            <button className="accent" onClick={handleApplyAiResponseToCase}>
+              Case Builder에 반영
+            </button>
+          </div>
+        </div>
+
         <div className="card">
           <h3>Execution Control</h3>
           <div className="row">

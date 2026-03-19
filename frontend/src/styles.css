@@ -174,6 +174,24 @@ label {
   flex-wrap: wrap;
 }
 
+.ai-prompt-card {
+  background:
+    radial-gradient(circle at 85% 5%, rgba(31, 143, 121, 0.13), transparent 42%),
+    var(--surface);
+}
+
+.ai-prompt-card .hint {
+  margin: 8px 0 10px;
+}
+
+.ai-prompt-card textarea {
+  margin-top: 4px;
+}
+
+.ai-prompt-card .buttons {
+  margin: 10px 0;
+}
+
 .device-manager {
   background: #f4faf7;
   border: 1px solid var(--border);
