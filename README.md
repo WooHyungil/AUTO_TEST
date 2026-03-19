@@ -1,184 +1,356 @@
-# Mobile UI Test Control Center
+# 📱 모바일 자동화 테스트 제어 센터
 
-Internal automation manager for Kia, Hyundai, and My Genesis apps.
+**안드로이드 앱을 자동으로 테스트하는 통합 관리 시스템**
 
-## What this PoC includes
+> 테스트 케이스 정의 → 단말 연결 → 자동 실행 → 결과 분석  
+> 모든 것을 한 웹 대시보드 `http://localhost:8001`에서!
 
-- FastAPI backend with REST + WebSocket
-- React dashboard with live updates
-- Laptop agent that auto-discovers USB Android devices via adb
-- Agent task queue (claim/report) and live run progress updates
-- Assertion-based pass/fail aggregation (expected vs actual)
-- Docker compose setup with backend/frontend/postgres/redis
+---
 
-## Architecture overview
+## ⚡ 빠른 시작 (Windows)
 
-1. Dashboard (React)
-- Login and worker status board
-- Test case list and quick case creation
-- Run trigger by app target
-- Live events and run progress
+### 1단계: 기본 요구 사항 확인
+```powershell
+# ADB 설치 확인
+adb version
 
-2. API Server (FastAPI)
-- Auth, session tracking, case CRUD, run control, device registration
-- WebSocket event broadcasting for realtime UI updates
-- In-memory store in PoC, designed to migrate to PostgreSQL + Redis
+# Node.js 설치 확인
+node -v  # v16 이상
 
-3. Agent (Node.js)
-- Runs on each employee laptop
-- Polls `adb devices` and syncs connected devices to backend
-- Can be extended to run Appium server per device and report execution logs
+# Python 설치 확인
+python --version  # 3.10 이상
+```
 
-4. Execution model
-- Run request includes app + selected case IDs + selected device IDs
-- Scheduler creates task queue and assigns cases to device slots
-- Each slot maps to dedicated Appium port set (4723, 8200, 9100 etc.)
-- Agent claims executable task by connected device list
-- Agent reports progress and assertion results (text/ui_state/navigation)
-- Progress/result stream to dashboard through WebSocket
+### 2단계: 원클릭 시작
+```powershell
+cd c:\Users\poliot\OneDrive\바탕화면\자동테스트_프로그램
+.\start.ps1
+```
 
-## Local run
+### 3단계: 브라우저 열기
+**http://localhost:8001** 에 접속
 
-### 1) Backend
+---
 
-```bash
+## 📖 사용 방법 (4단계 가이드)
+
+### 🔑 **1단계: 로그인**
+- 사용자명 입력 (예: "test_user")
+- 로그인 버튼 클릭
+- 대시보드 진입 ✅
+
+### 📝 **2단계: 테스트 케이스 선택**
+1. **왼쪽 메뉴** → "테스트 케이스" 클릭
+2. **실행할 앱과 테스트 시나리오** 선택
+   - 예: "로그인 화면에서 이메일 입력 후 로그인"
+3. **선택 완료** ✅
+
+### 🔌 **3단계: 안드로이드 단말 연결 & 등록**
+
+#### A. 단말이 PC에 USB로 연결된 경우
+```powershell
+# 1. PowerShell에서 확인
+adb devices
+
+# 2. 출력 예:
+# List of attached devices
+# emulator-5554    device
+# R58M812A5XX      device
+```
+
+**만약 단말이 표시되지 않으면:**
+1. **안드로이드 단말 설정**
+   - 설정 → 개발자 옵션 → USB 디버깅 **ON**
+   - 이 컴퓨터를 항상 허용 **체크**
+2. **USB 다시 연결**
+3. **윈도우의 ADB 재시작**
+   ```powershell
+   adb kill-server
+   adb start-server
+   adb devices
+   ```
+
+#### B. 대시보드에 단말 등록
+1. **오른쪽 메뉴** → "단말 등록" 클릭
+2. **"스캔" 버튼** → 연결된 단말 자동 발견
+3. **단말 선택** 후 "등록" 버튼 클릭 ✅
+
+### ▶️ **4단계: 테스트 실행 & 모니터링**
+1. 선택한 **케이스✓** + **단말✓** 확인
+2. **"테스트 시작"** 버튼 클릭
+3. **실시간 진행 상태** 모니터링:
+   - 📊 진행률 바 표시
+   - 📝 로그 메시지 실시간 출력
+   - 📸 스크린샷 자동 캡처
+4. **완료 후 결과 분석**:
+   - ✅ 성공 / ❌ 실패 여부
+   - 🔍 실패 원인 분류 (로케이터 미발견, 타임아웃 등)
+   - 📥 CSV 감사 보고서 내보내기
+
+---
+
+## 🔧 고급 설정: 에이전트 (Agent) 수동 구성
+
+### Agent란?
+**실제 안드로이드 단말에 명령을 보내고 테스트를 실행하는 프로세스**
+- ADB로 단말 스캔
+- Appium으로 앱 자동화
+- 백엔드와 WebSocket 통신
+
+### Agent 시작하기
+```powershell
+# 1. 프로젝트 폴더에서
+cd c:\Users\poliot\OneDrive\바탕화면\자동테스트_프로그램\agent
+
+# 2. 의존성 설치 (처음 한 번만)
+npm install
+
+# 3. 환경 설정
+$env:API_BASE = "http://localhost:8001/api"
+$env:AGENT_PLATFORM = "android"
+$env:EXECUTE_REAL_APPIUM = "true"      # 실제 실행
+# $env:EXECUTE_REAL_APPIUM = "false"   # 시뮬레이션 (테스트용)
+
+# 4. 에이전트 시작
+node src/index.js
+
+# 출력 예:
+# [Agent] Platform: android
+# [Agent] Poll interval: 4000ms
+# [Agent] Scanning devices...
+# [Agent] Found devices: [emulator-5554]
+# [Agent] Connected to backend: http://localhost:8001/api
+```
+
+### Agent 환경 변수
+| 변수 | 설명 | 기본값 |
+|------|------|--------|
+| `API_BASE` | 백엔드 API 주소 | http://localhost:8000/api |
+| `AGENT_USER` | 에이전트 식별자 | local-agent |
+| `AGENT_PLATFORM` | 플랫폼 (android\|ios) | android |
+| `POLL_MS` | 작업 폴링 간격 (ms) | 4000 |
+| `EXECUTE_REAL_APPIUM` | 실제 Appium 실행 여부 | false |
+| `TASK_MAX_RETRY` | 실패 시 재시도 횟수 | 1 |
+
+---
+
+## 📱 Android 단말 연결 완전 가이드
+
+### 📌 사전 준비
+- 안드로이드 10 이상
+- USB 케이블 (USB 3.0 권장)
+- PC의 Android SDK 또는 독립 설치 ADB
+
+### 🔌 USB 연결 (권장)
+
+#### 1. PC 준비
+```powershell
+# ADB 설치 위치 확인
+where adb
+
+# PATH에 없으면 추가:
+$env:PATH += ";C:\Users\[username]\AppData\Local\Android\Sdk\platform-tools"
+```
+
+#### 2. 안드로이드 단말 준비
+1. **설정 앱 열기**
+2. **휴대전화 정보 또는 빌드 번호로 이동**
+   - Q: 설정 → 휴대전화 정보 → **빌드 번호** 7번 탭
+   - A: 설정 → 개발자 옵션 (이미 있음)
+3. **개발자 옵션** 진입
+4. **USB 디버깅** ON
+5. **"이 항상 허용"** 체크 (권한 요청 시)
+6. **USB Type-C 케이블로 PC 연결**
+
+#### 3. 연결 확인
+```powershell
+adb devices
+
+# 출력 예:
+# List of attached devices
+# emulator-5554       device
+# 192.168.1.100:5555  device
+```
+
+### 🌐 WiFi 연결 (옵션)
+```powershell
+# 1. USB로 먼저 연결 후 명령 실행
+adb tcpip 5555
+
+# 2. USB 뽑기 (선택사항)
+
+# 3. 단말의 IP 확인 후 재연결
+adb connect 192.168.1.100:5555
+# (단말의 실제 IP로 변경)
+
+# 4. 확인
+adb devices
+```
+
+### ❌ 연결 문제 해결
+
+| 증상 | 원인 | 해결책 |
+|------|------|--------|
+| `adb: command not found` | ADB PATH 미설정 | 위의 PATH 추가 참고 |
+| `unauthorized` | 권한 거부 | 단말에서 "이 컴퓨터 항상 허용" 선택 |
+| `device offline` | USB 연결 끊김 | USB 다시 연결 |
+| `no devices found` | 디버그 모드 OFF | 단말: 설정 → 개발자 옵션 → USB 디버깅 ON |
+
+---
+
+## 📊 결과 분석 & 리포팅
+
+### 테스트 상태
+| 상태 | 의미 | 대응 |
+|------|------|------|
+| ✅ **PASS** | 모든 검증 성공 | 완료 |
+| ❌ **FAIL** | 일부 검증 실패 | 실패 원인 분석 |
+| ⏱️ **TIMEOUT** | 초과 시간 | 네트워크/앱 속도 확인 |
+| 🔌 **CONNECTION_ERROR** | 단말 연결 끊김 | USB/WiFi 재확인 |
+
+### 감사 보고서 내보내기
+1. 오른쪽 상단 **"감사 보고서"** 클릭
+2. **실패 유형별 통계** 확인
+3. **"Excel 내보내기"** 버튼 → CSV 다운로드
+4. 분석 스프레드시트에서 상세 검토
+
+---
+
+## 🏗️ 프로젝트 구조
+
+```
+자동테스트_프로그램/
+├── frontend/                    # React 웹 UI
+│   ├── src/
+│   │   ├── pages/              # 페이지 컴포넌트
+│   │   ├── services/           # API/WebSocket 클라이언트
+│   │   └── styles.css          # 전역 스타일
+│   ├── dist/                   # 프로덕션 빌드 (start.ps1 자동 생성)
+│   └── package.json
+├── backend/                     # FastAPI 백엔드 서버
+│   ├── app/
+│   │   ├── api/                # API 라우터
+│   │   │   ├── auth.py         # 인증
+│   │   │   ├── devices.py      # 단말 관리
+│   │   │   ├── cases.py        # 테스트 케이스
+│   │   │   ├── runs.py         # 테스트 실행
+│   │   │   └── agents.py       # 에이전트 통신
+│   │   ├── services/           # 비즈니스 로직
+│   │   │   ├── state.py        # 메모리 상태 저장소
+│   │   │   └── runner.py       # 테스트 실행 시뮬레이션
+│   │   └── schemas/            # 데이터 모델
+│   └── requirements.txt
+├── agent/                       # Node.js Appium 에이전트
+│   ├── src/
+│   │   ├── index.js            # 메인 루프 (작업 폴링)
+│   │   ├── adbScanner.js       # ADB 디바이스 스캔
+│   │   └── appiumExecutor.js   # Appium 실행
+│   └── package.json
+├── scripts/                     # 유틸리티 스크립트
+│   ├── e2e_smoke_test.py       # 기능 테스트
+│   └── check_api_routes.py     # API 검증
+├── start.ps1                    # [중요] 원클릭 시작 (Windows)
+└── README.md                    # 이 파일
+```
+
+---
+
+## 🧪 테스트 & 검증
+
+### 전체 기능 E2E 테스트
+```powershell
+# Python 가상환경 활성화 후:
 cd backend
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+python ..\scripts\e2e_smoke_test.py
 ```
 
-### 2) Frontend
+**성공 시 출력:**
+```
+✅ Stage 1: Login - PASS
+✅ Stage 2: Select Case - PASS
+✅ Stage 3: Register Device - PASS
+✅ Stage 4: Start Run - PASS
+✅ Stage 5: Poll Task Queue - PASS
+✅ Stage 6: Fetch Task Details - PASS
+```
 
-```bash
+---
+
+## 💡 FAQ
+
+### Q: 브라우저에서 아무것도 안 보여요
+**A:** 다음 확인:
+```powershell
+# 1. 포트 확인
+netstat -ano | Select-String "8001"
+
+# 2. 브라우저 개발자 도구 (F12)
+# - Network 탭: 요청 상태 확인
+# - Console: 에러 메시지 확인
+
+# 3. 강제 새로고침
+Ctrl + Shift + R
+```
+
+### Q: 테스트가 "pending" 상태에 멈춰요
+**A:** Agent 미실행 또는 단말 미연결:
+```powershell
+# 1. Agent 프로세스 확인
+Get-Process node
+
+# 2. 없으면 Agent 시작
+cd agent
+$env:EXECUTE_REAL_APPIUM = "false"  # 시뮬레이션 모드
+node src/index.js
+```
+
+### Q: "단말이 offline" 표시돼요
+**A:**
+```powershell
+# 방법 1: ADB 재시작
+adb kill-server
+adb start-server
+adb devices
+
+# 방법 2: USB 다시 연결
+
+# 방법 3: 안드로이드 단말
+# 설정 → 개발자 옵션 → USB 디버깅 ON
+```
+
+### Q: 어디서 로그를 봐요?
+**A:**
+- **브라우저**: 개발자 도구 (F12) → Console 탭
+- **PowerShell**: Agent 실행 터미널의 메시지
+- **백엔드**: `python -m uvicorn ... --reload` 터미널의 로그
+
+---
+
+## 🚀 개발 모드 (기여자용)
+
+### 프론트엔드 개발 서버 (핫 리로드)
+```powershell
 cd frontend
-npm install
 npm run dev
+# → http://localhost:5173 에서 개발
 ```
 
-### 3) Agent
-
-```bash
-cd agent
-npm install
-npm run dev
+### 백엔드 개발 (자동 재시작)
+```powershell
+cd backend
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8001
 ```
 
-### 4) Real Appium mode (agent)
+---
 
-If you already run Appium per device, start agent with real mode:
+## 📞 지원
 
-```bash
-cd agent
-set EXECUTE_REAL_APPIUM=true
-set APPIUM_HOST=127.0.0.1
-set APPIUM_PATH=/wd/hub
-set KIA_APP_PACKAGE=com.kia.app
-set KIA_APP_ACTIVITY=com.kia.app.MainActivity
-set HYUNDAI_APP_PACKAGE=com.hyundai.app
-set HYUNDAI_APP_ACTIVITY=com.hyundai.app.MainActivity
-set GENESIS_APP_PACKAGE=com.genesis.app
-set GENESIS_APP_ACTIVITY=com.genesis.app.MainActivity
-npm run dev
-```
+**이슈 신고**: [GitHub Issues](https://github.com/WooHyungil/AUTO_TEST/issues)
 
-Notes:
-- `APPIUM_PORT` can be set to force a fixed server port.
-- If `APPIUM_PORT` is omitted, agent uses calculated per-device appium port.
-- Agent fetches test case via `/api/cases/{case_id}` and evaluates expected text against page source.
-- Agent uploads screenshot and page source into task report for dashboard debugging.
-- `TASK_MAX_RETRY` controls retry count per task (default: `1`).
-- `RETRY_ON_TYPES` controls which failure types are retried by agent.
-- `MAX_SERVER_REQUEUE` controls server-side requeue count for failed tasks (default: `1`).
+---
 
-Case step syntax (real mode):
-- `wait:1500`
-- `tap:id=com.example:id/login_button`
-- `tap:xpath=//android.widget.TextView[@text='Login']`
-- `tap:accessibility=Home`
-- `input:id=com.example:id/id_field|text=user01`
-- `expect:text=Welcome`
+## 📄 라이선스
 
-Validation:
-- Backend validates step syntax when creating case and returns `400` for malformed lines.
-- Dashboard case builder also validates step lines before submit.
+비공개 프로젝트
 
-Retry behavior:
-- Agent retries locally up to `TASK_MAX_RETRY`.
-- Agent retry can be limited to selected failure types via `RETRY_ON_TYPES`.
-- If task still fails, server marks original task as `retried` and enqueues a new task up to `MAX_SERVER_REQUEUE`.
-- Server prevents concurrent claim on the same device while another task is `claimed` or `running`.
-
-Priority scheduling:
-- Run creation accepts `priority` (1 to 5, default 3).
-- Agent claim selects queued tasks by higher run priority first, then higher retry index.
-- Queue depth can be fetched from `GET /api/runs/queue/summary`.
-- Queue summary includes ETA seconds (`eta_seconds`) based on active worker devices.
-- Queue summary also includes cumulative ETA by priority (`eta_by_priority`).
-
-Dashboard report extras:
-- Failure type Top cards are clickable to filter task list by failed assertion type.
-- Retry timeline groups attempts by `root_task_id` to inspect retry history quickly.
-- Device filter can be combined with failure-type filter.
-- Task filters support failure type + device + status + agent + keyword search.
-- Clicking retry timeline item scrolls and focuses the matching task row.
-- WebSocket refresh is debounced to reduce repeated full reloads during burst events.
-- Task list uses windowed rendering for better performance on large runs.
-- Failure type selection shows an auto response guide with actionable steps.
-- Failure type cards can trigger manual requeue for the selected run.
-- Boost Run Priority action can raise current run priority quickly.
-- Failure type cards display recommended run priority (rec Pn).
-- Failure type cards provide one-click `Apply` action to set recommended priority.
-- Run rows are SLA-highlighted (warning/critical) by status, runtime age, and queue pressure.
-- Running/Queue SLA threshold minutes are configurable in execution controls.
-- Requeue events are aggregated in live feed to reduce noise.
-- Event feed supports jump navigation to related run/task context.
-- Priority changes are logged as audit events with actor/reason.
-- Audit events can be filtered by actor and time window in dashboard.
-- Audit events can be filtered by event type (priority/requeue/execution/other).
-- Filtered audit events can be exported as JSON from dashboard.
-- SLA minute settings persist in browser local storage.
-
-Failure classification:
-- Agent classifies failures into types like `locator_not_found`, `session_start_failed`, `timeout`, `connection_error`.
-
-## Suggested production upgrade path
-
-1. Replace in-memory store with PostgreSQL models and Redis pub/sub.
-2. Add JWT auth + RBAC (`admin`, `qa`, `viewer`).
-3. Introduce Appium grid manager in agent:
-- one Appium instance per USB device
-- unique `systemPort`, `chromedriverPort`, `wdaLocalPort` allocation
-4. Add durable queue (Celery/RQ/BullMQ/Kafka) for execution scheduling.
-5. Add result comparator service:
-- text assertion
-- UI state assertion
-- navigation assertion
-6. Add report dashboard widgets:
-- pass rate by app/team/member
-- flakiness index
-- mean time to failure
-7. Deploy on Kubernetes with HPA + rolling updates + readiness probes.
-
-## Core API endpoints (PoC)
-
-- `POST /api/auth/login`
-- `GET /api/auth/sessions`
-- `POST /api/cases`
-- `GET /api/cases`
-- `POST /api/devices`
-- `GET /api/devices`
-- `POST /api/runs`
-- `GET /api/runs`
-- `GET /api/runs/queue/summary`
-- `GET /api/runs/{run_id}/tasks`
-- `POST /api/runs/{run_id}/priority`
-- `POST /api/runs/{run_id}/requeue-failure-type`
-- `POST /api/agents/tasks/claim`
-- `POST /api/agents/tasks/{task_id}/report`
-- `GET /health`
-- `WS /ws`
-
-## Notes
-
-- This repository is a runnable skeleton and not final production code.
-- iOS USB detection and WDA orchestration should be added in a dedicated macOS agent.
+**마지막 업데이트**: 2026-03-19

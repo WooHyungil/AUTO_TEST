@@ -9,6 +9,7 @@ import {
   fetchRuns,
   fetchSessions,
   login,
+  registerDevice,
   requeueFailureType,
   updateRunPriority,
 } from "../services/api";

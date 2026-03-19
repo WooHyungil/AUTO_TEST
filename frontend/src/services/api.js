@@ -39,6 +39,15 @@ export async function fetchDevices() {
   return res.json();
 }
 
+export async function registerDevice(payload) {
+  const res = await fetch(`${BASE_URL}/devices`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}
+
 export async function createRun(payload) {
   const res = await fetch(`${BASE_URL}/runs`, {
     method: "POST",
