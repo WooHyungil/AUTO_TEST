@@ -1,4 +1,8 @@
 import { remote } from "webdriverio";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 function classifyExecutionError(errorMessage) {
   const message = String(errorMessage || "").toLowerCase();
@@ -19,30 +23,131 @@ function classifyExecutionError(errorMessage) {
 
 function capabilityForApp(appName) {
   if (appName === "Kia") {
-    if (!process.env.KIA_APP_PACKAGE || !process.env.KIA_APP_ACTIVITY) {
+    if (!process.env.KIA_APP_PACKAGE) {
       return {};
     }
-    return {
-      "appium:appPackage": process.env.KIA_APP_PACKAGE,
-      "appium:appActivity": process.env.KIA_APP_ACTIVITY
+    const capability = {
+      "appium:appPackage": process.env.KIA_APP_PACKAGE
     };
+    if (process.env.KIA_APP_ACTIVITY) {
+      capability["appium:appActivity"] = process.env.KIA_APP_ACTIVITY;
+    }
+    return capability;
   }
   if (appName === "Hyundai") {
-    if (!process.env.HYUNDAI_APP_PACKAGE || !process.env.HYUNDAI_APP_ACTIVITY) {
+    if (!process.env.HYUNDAI_APP_PACKAGE) {
       return {};
     }
-    return {
-      "appium:appPackage": process.env.HYUNDAI_APP_PACKAGE,
-      "appium:appActivity": process.env.HYUNDAI_APP_ACTIVITY
+    const capability = {
+      "appium:appPackage": process.env.HYUNDAI_APP_PACKAGE
     };
+    if (process.env.HYUNDAI_APP_ACTIVITY) {
+      capability["appium:appActivity"] = process.env.HYUNDAI_APP_ACTIVITY;
+    }
+    return capability;
   }
-  if (!process.env.GENESIS_APP_PACKAGE || !process.env.GENESIS_APP_ACTIVITY) {
+  if (!process.env.GENESIS_APP_PACKAGE) {
     return {};
   }
-  return {
-    "appium:appPackage": process.env.GENESIS_APP_PACKAGE,
-    "appium:appActivity": process.env.GENESIS_APP_ACTIVITY
+  const capability = {
+    "appium:appPackage": process.env.GENESIS_APP_PACKAGE
   };
+  if (process.env.GENESIS_APP_ACTIVITY) {
+    capability["appium:appActivity"] = process.env.GENESIS_APP_ACTIVITY;
+  }
+  return capability;
+}
+
+function packageKeywordsForApp(appName) {
+  const normalized = String(appName || "").toLowerCase();
+  if (normalized === "kia") {
+    return ["kia", "uvo", "kiaconnect", "kia.connect"];
+  }
+  if (normalized === "hyundai") {
+    return ["hyundai", "bluelink", "hyundai.connect"];
+  }
+  return ["genesis", "gv", "genesisintelligent"];
+}
+
+async function detectInstalledPackage(udid, appName) {
+  const keywords = packageKeywordsForApp(appName);
+  const { stdout } = await execFileAsync("adb", ["-s", udid, "shell", "pm", "list", "packages"]);
+  const packages = String(stdout || "")
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^package:/, "").trim())
+    .filter(Boolean);
+
+  for (const keyword of keywords) {
+    const found = packages.find((pkg) => pkg.toLowerCase().includes(keyword));
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+async function prepareDeviceSession(driver, logs) {
+  try {
+    await driver.execute("mobile: shell", { command: "input", args: ["keyevent", "KEYCODE_WAKEUP"] });
+  } catch {
+    // best-effort wakeup
+  }
+  try {
+    await driver.execute("mobile: shell", { command: "wm", args: ["dismiss-keyguard"] });
+  } catch {
+    // best-effort dismiss
+  }
+  try {
+    const locked = await driver.isLocked();
+    if (locked) {
+      await driver.unlock();
+      logs.push("device unlocked");
+    }
+  } catch {
+    // best-effort unlock
+  }
+}
+
+async function ensureAppForeground(driver, targetPackage, logs) {
+  try {
+    await driver.activateApp(targetPackage);
+    await driver.pause(1200);
+    logs.push(`activated app package: ${targetPackage}`);
+  } catch (error) {
+    logs.push(`activate app failed for ${targetPackage}: ${String(error.message || error)}`);
+  }
+
+  let currentPackage = null;
+  try {
+    currentPackage = await driver.getCurrentPackage();
+    logs.push(`current package after activate: ${currentPackage}`);
+  } catch {
+    // ignore package read failures
+  }
+
+  if (currentPackage === targetPackage) {
+    return;
+  }
+
+  try {
+    await driver.execute("mobile: shell", {
+      command: "monkey",
+      args: ["-p", targetPackage, "-c", "android.intent.category.LAUNCHER", "1"]
+    });
+    await driver.pause(1500);
+    logs.push(`launch fallback via monkey for ${targetPackage}`);
+  } catch (error) {
+    logs.push(`launch fallback failed for ${targetPackage}: ${String(error.message || error)}`);
+    return;
+  }
+
+  try {
+    const afterLaunchPackage = await driver.getCurrentPackage();
+    logs.push(`current package after monkey: ${afterLaunchPackage}`);
+  } catch {
+    // ignore package read failures
+  }
 }
 
 export async function runAppiumTask({ task, testCase, ports }) {
@@ -61,14 +166,29 @@ export async function runAppiumTask({ task, testCase, ports }) {
     ...capabilityForApp(task.app)
   };
 
-  if (!capabilities["appium:appPackage"] || !capabilities["appium:appActivity"]) {
-    logs.push(`app package/activity not configured for ${task.app}; using current foreground app`);
-  }
-
   const logs = [];
   const assertions = [];
   let screenshotBase64 = null;
   let pageSource = null;
+
+  if (!capabilities["appium:appPackage"] || !capabilities["appium:appActivity"]) {
+    logs.push(`app package/activity not fully configured for ${task.app}; attempting auto detection`);
+  }
+
+  let autoDetectedPackage = null;
+  if (!capabilities["appium:appPackage"]) {
+    try {
+      autoDetectedPackage = await detectInstalledPackage(task.device_id, task.app);
+      if (autoDetectedPackage) {
+        capabilities["appium:appPackage"] = autoDetectedPackage;
+        logs.push(`auto-detected app package: ${autoDetectedPackage}`);
+      } else {
+        logs.push(`no installed package match found for app=${task.app}`);
+      }
+    } catch (error) {
+      logs.push(`auto-detect package failed: ${String(error.message || error)}`);
+    }
+  }
 
   async function resolveElement(driver, locatorExpr) {
     const [type, value] = String(locatorExpr || "").split("=", 2);
@@ -87,6 +207,50 @@ export async function runAppiumTask({ task, testCase, ports }) {
     throw new Error(`unsupported locator type: ${type}`);
   }
 
+  async function resolveTapElementWithFallback(driver, locatorExpr) {
+    const [type, rawValue] = String(locatorExpr || "").split("=", 2);
+    const value = String(rawValue || "").trim();
+    if (!type || !value) {
+      throw new Error(`invalid locator: ${locatorExpr}`);
+    }
+
+    if (type !== "accessibility") {
+      return resolveElement(driver, locatorExpr);
+    }
+
+    const candidates = [
+      `~${value}`,
+      `android=new UiSelector().description("${value}")`,
+      `android=new UiSelector().text("${value}")`,
+      `android=new UiSelector().textContains("${value}")`,
+      `//*[contains(@text, "${value}")]`
+    ];
+
+    for (const selector of candidates) {
+      const element = await driver.$(selector);
+      const exists = await element.isExisting();
+      if (!exists) {
+        continue;
+      }
+      const visible = await element.isDisplayed();
+      if (!visible) {
+        continue;
+      }
+      logs.push(`tap fallback matched selector: ${selector}`);
+      return element;
+    }
+
+    throw new Error(`element not found with accessibility fallback: ${value}`);
+  }
+
+  async function tapCenter(driver) {
+    const rect = await driver.getWindowRect();
+    const centerX = Math.floor(rect.width / 2);
+    const centerY = Math.floor(rect.height / 2);
+    await driver.execute("mobile: clickGesture", { x: centerX, y: centerY });
+    logs.push(`tap center (${centerX}, ${centerY})`);
+  }
+
   async function executeStep(driver, rawStep) {
     const step = String(rawStep || "").trim();
     if (!step) {
@@ -102,10 +266,18 @@ export async function runAppiumTask({ task, testCase, ports }) {
 
     if (step.startsWith("tap:")) {
       const locator = step.slice(4);
-      const element = await resolveElement(driver, locator);
-      await element.waitForDisplayed({ timeout: 10000 });
-      await element.click();
-      logs.push(`tap ${locator}`);
+      try {
+        const element = await resolveTapElementWithFallback(driver, locator);
+        await element.click();
+        logs.push(`tap ${locator}`);
+      } catch (error) {
+        if (locator.startsWith("accessibility=")) {
+          logs.push(`tap fallback failed for ${locator}: ${String(error.message || error)}`);
+          await tapCenter(driver);
+        } else {
+          throw error;
+        }
+      }
       return;
     }
 
@@ -147,6 +319,20 @@ export async function runAppiumTask({ task, testCase, ports }) {
     });
 
     logs.push(`session started for ${task.device_id}`);
+    await prepareDeviceSession(driver, logs);
+
+    const targetPackage = capabilities["appium:appPackage"] || autoDetectedPackage;
+    if (targetPackage) {
+      await ensureAppForeground(driver, targetPackage, logs);
+
+      const currentPackage = await driver.getCurrentPackage();
+      if (currentPackage !== targetPackage) {
+        throw new Error(
+          `target app not foregrounded (target=${targetPackage}, current=${currentPackage}). ` +
+            "Unlock device and keep screen on before running real-device tests."
+        );
+      }
+    }
 
     if (Array.isArray(testCase.steps) && testCase.steps.length > 0) {
       for (const step of testCase.steps) {
@@ -187,6 +373,18 @@ export async function runAppiumTask({ task, testCase, ports }) {
     pageSource = await driver.getPageSource();
     logs.push(`current activity: ${activity}`);
   } catch (error) {
+    if (driver) {
+      try {
+        screenshotBase64 = await driver.takeScreenshot();
+      } catch {
+        // ignore artifact capture errors
+      }
+      try {
+        pageSource = await driver.getPageSource();
+      } catch {
+        // ignore artifact capture errors
+      }
+    }
     const failureType = classifyExecutionError(error.message || error);
     assertions.push({
       type: failureType,

@@ -66,7 +66,27 @@ async function fetchCase(caseId) {
 
 async function executeTask(task) {
   const ports = calculatePorts(task.device_id);
-  const testCase = await fetchCase(task.case_id);
+  let testCase;
+
+  try {
+    testCase = await fetchCase(task.case_id);
+  } catch (error) {
+    const message = String(error.message || error);
+    await reportTask(task.id, {
+      status: "failed",
+      progress: 100,
+      assertions: [
+        {
+          type: "case_fetch_failed",
+          expected: "case exists",
+          actual: message,
+          passed: false
+        }
+      ],
+      log_line: `case fetch failed: ${message}`
+    });
+    return;
+  }
 
   await reportTask(task.id, {
     status: "running",

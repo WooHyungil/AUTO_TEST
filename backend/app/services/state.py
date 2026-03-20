@@ -188,6 +188,21 @@ class InMemoryStore:
 
     async def claim_task(self, agent_name: str, device_ids: list[str]) -> AgentTask | None:
         async with self._lock:
+            # Recover stale claimed/running tasks so one stuck task does not block the whole device queue.
+            now = datetime.utcnow()
+            stale_seconds = 180
+            for task in self.tasks.values():
+                if task.status not in {"claimed", "running"}:
+                    continue
+                if not task.started_at:
+                    continue
+                age = (now - task.started_at).total_seconds()
+                if age > stale_seconds:
+                    task.status = "queued"
+                    task.assigned_to = None
+                    task.progress = min(task.progress, 10)
+                    task.logs.append(f"server recovered stale task after {int(age)}s")
+
             busy_devices = {
                 task.device_id
                 for task in self.tasks.values()
