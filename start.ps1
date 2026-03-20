@@ -11,6 +11,13 @@ $UVICORN = Join-Path $VENV "uvicorn.exe"
 $BACKEND = Join-Path $ROOT "backend"
 $FRONTEND = Join-Path $ROOT "frontend"
 $AGENT = Join-Path $ROOT "agent"
+$PORT = 8001
+
+$portBusy = netstat -ano | Select-String ":$PORT" | Select-String "LISTENING"
+if ($portBusy) {
+    Write-Host "기본 포트 8001이 이미 사용 중입니다. 포트 8010으로 자동 전환합니다." -ForegroundColor Yellow
+    $PORT = 8010
+}
 
 Write-Host "`n[1/2] 프론트 빌드 (backend 단일 URL 제공용)..." -ForegroundColor Cyan
 Set-Location $FRONTEND
@@ -21,24 +28,24 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-Write-Host "`n[2/3] 백엔드 기동 (port 8001)..." -ForegroundColor Cyan
+Write-Host "`n[2/3] 백엔드 기동 (port $PORT)..." -ForegroundColor Cyan
 Stop-Job -Name qa-back -ErrorAction SilentlyContinue
 Remove-Job -Name qa-back -ErrorAction SilentlyContinue
 Stop-Job -Name qa-agent -ErrorAction SilentlyContinue
 Remove-Job -Name qa-agent -ErrorAction SilentlyContinue
 
 Start-Job -Name qa-back -ScriptBlock {
-    param($uvicorn, $backend)
+    param($uvicorn, $backend, $port)
     Set-Location $backend
     $env:PYTHONPATH = $backend
-    & $uvicorn app.main:app --host 0.0.0.0 --port 8001 2>&1
-} -ArgumentList $UVICORN, $BACKEND | Out-Null
+    & $uvicorn app.main:app --host 0.0.0.0 --port $port 2>&1
+} -ArgumentList $UVICORN, $BACKEND, $PORT | Out-Null
 
 Start-Sleep -Seconds 3
 
 # Health check
 try {
-    $health = Invoke-RestMethod http://127.0.0.1:8001/health
+    $health = Invoke-RestMethod "http://127.0.0.1:$PORT/health"
     Write-Host "    백엔드 OK: $($health.service)" -ForegroundColor Green
 } catch {
     Write-Host "    백엔드 응답 없음 - 로그 확인:" -ForegroundColor Red
@@ -52,15 +59,15 @@ if (!(Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Host "    agent 폴더 없음 - 에이전트는 시작하지 않습니다." -ForegroundColor Yellow
 } else {
     Start-Job -Name qa-agent -ScriptBlock {
-        param($agentDir)
+        param($agentDir, $port)
         Set-Location $agentDir
-        $env:API_BASE = "http://127.0.0.1:8001/api"
+        $env:API_BASE = "http://127.0.0.1:$port/api"
         $env:AGENT_USER = "local-agent"
         if (!(Test-Path (Join-Path $agentDir "node_modules"))) {
             npm install 2>&1 | Out-Null
         }
         node src/index.js 2>&1
-    } -ArgumentList $AGENT | Out-Null
+    } -ArgumentList $AGENT, $PORT | Out-Null
 
     Start-Sleep -Seconds 2
     $agentLogs = Get-Job -Name qa-agent | Receive-Job -Keep 2>&1 | Select-Object -Last 3
@@ -73,9 +80,9 @@ if (!(Get-Command node -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host "`n========================================" -ForegroundColor Yellow
-Write-Host "  대시보드: http://localhost:8001" -ForegroundColor Yellow
-Write-Host "  백엔드:   http://localhost:8001/health" -ForegroundColor Yellow
-Write-Host "  API 문서: http://localhost:8001/docs" -ForegroundColor Yellow
+Write-Host "  대시보드: http://localhost:$PORT" -ForegroundColor Yellow
+Write-Host "  백엔드:   http://localhost:$PORT/health" -ForegroundColor Yellow
+Write-Host "  API 문서: http://localhost:$PORT/docs" -ForegroundColor Yellow
 Write-Host "  에이전트: Get-Job -Name qa-agent | Receive-Job -Keep" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Yellow
 Write-Host "`n실행 중... (종료: Stop-Job -Name qa-back,qa-agent)" -ForegroundColor Gray
