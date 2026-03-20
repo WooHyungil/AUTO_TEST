@@ -33,6 +33,8 @@ Stop-Job -Name qa-back -ErrorAction SilentlyContinue
 Remove-Job -Name qa-back -ErrorAction SilentlyContinue
 Stop-Job -Name qa-agent -ErrorAction SilentlyContinue
 Remove-Job -Name qa-agent -ErrorAction SilentlyContinue
+Stop-Job -Name qa-appium -ErrorAction SilentlyContinue
+Remove-Job -Name qa-appium -ErrorAction SilentlyContinue
 
 Start-Job -Name qa-back -ScriptBlock {
     param($uvicorn, $backend, $port)
@@ -52,7 +54,18 @@ try {
     Get-Job -Name qa-back | Receive-Job 2>&1 | Select-Object -Last 10
 }
 
-Write-Host "`n[3/3] 에이전트 기동 (단말 자동 동기화)..." -ForegroundColor Cyan
+Write-Host "`n[3/4] Appium 기동 (port 4723)..." -ForegroundColor Cyan
+if (!(Get-Command appium -ErrorAction SilentlyContinue)) {
+    Write-Host "    appium 명령을 찾지 못했습니다. 전역 설치 필요: npm i -g appium" -ForegroundColor Yellow
+} else {
+    Start-Job -Name qa-appium -ScriptBlock {
+        appium -p 4723 --base-path /wd/hub 2>&1
+    } | Out-Null
+    Start-Sleep -Seconds 2
+    Write-Host "    Appium 시작 시도 완료" -ForegroundColor Green
+}
+
+Write-Host "`n[4/4] 에이전트 기동 (단말 자동 동기화)..." -ForegroundColor Cyan
 if (!(Get-Command node -ErrorAction SilentlyContinue)) {
     Write-Host "    Node.js 미설치 - 에이전트는 시작하지 않습니다." -ForegroundColor Yellow
 } elseif (!(Test-Path $AGENT)) {
@@ -63,6 +76,10 @@ if (!(Get-Command node -ErrorAction SilentlyContinue)) {
         Set-Location $agentDir
         $env:API_BASE = "http://127.0.0.1:$port/api"
         $env:AGENT_USER = "local-agent"
+        $env:EXECUTE_REAL_APPIUM = "true"
+        $env:APPIUM_HOST = "127.0.0.1"
+        $env:APPIUM_PORT = "4723"
+        $env:APPIUM_PATH = "/wd/hub"
         if (!(Test-Path (Join-Path $agentDir "node_modules"))) {
             npm install 2>&1 | Out-Null
         }
@@ -84,5 +101,6 @@ Write-Host "  대시보드: http://localhost:$PORT" -ForegroundColor Yellow
 Write-Host "  백엔드:   http://localhost:$PORT/health" -ForegroundColor Yellow
 Write-Host "  API 문서: http://localhost:$PORT/docs" -ForegroundColor Yellow
 Write-Host "  에이전트: Get-Job -Name qa-agent | Receive-Job -Keep" -ForegroundColor Yellow
+Write-Host "  Appium:   Get-Job -Name qa-appium | Receive-Job -Keep" -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Yellow
-Write-Host "`n실행 중... (종료: Stop-Job -Name qa-back,qa-agent)" -ForegroundColor Gray
+Write-Host "`n실행 중... (종료: Stop-Job -Name qa-back,qa-agent,qa-appium)" -ForegroundColor Gray

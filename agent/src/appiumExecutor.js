@@ -19,20 +19,29 @@ function classifyExecutionError(errorMessage) {
 
 function capabilityForApp(appName) {
   if (appName === "Kia") {
+    if (!process.env.KIA_APP_PACKAGE || !process.env.KIA_APP_ACTIVITY) {
+      return {};
+    }
     return {
-      "appium:appPackage": process.env.KIA_APP_PACKAGE || "com.kia.app",
-      "appium:appActivity": process.env.KIA_APP_ACTIVITY || "com.kia.app.MainActivity"
+      "appium:appPackage": process.env.KIA_APP_PACKAGE,
+      "appium:appActivity": process.env.KIA_APP_ACTIVITY
     };
   }
   if (appName === "Hyundai") {
+    if (!process.env.HYUNDAI_APP_PACKAGE || !process.env.HYUNDAI_APP_ACTIVITY) {
+      return {};
+    }
     return {
-      "appium:appPackage": process.env.HYUNDAI_APP_PACKAGE || "com.hyundai.app",
-      "appium:appActivity": process.env.HYUNDAI_APP_ACTIVITY || "com.hyundai.app.MainActivity"
+      "appium:appPackage": process.env.HYUNDAI_APP_PACKAGE,
+      "appium:appActivity": process.env.HYUNDAI_APP_ACTIVITY
     };
   }
+  if (!process.env.GENESIS_APP_PACKAGE || !process.env.GENESIS_APP_ACTIVITY) {
+    return {};
+  }
   return {
-    "appium:appPackage": process.env.GENESIS_APP_PACKAGE || "com.genesis.app",
-    "appium:appActivity": process.env.GENESIS_APP_ACTIVITY || "com.genesis.app.MainActivity"
+    "appium:appPackage": process.env.GENESIS_APP_PACKAGE,
+    "appium:appActivity": process.env.GENESIS_APP_ACTIVITY
   };
 }
 
@@ -51,6 +60,10 @@ export async function runAppiumTask({ task, testCase, ports }) {
     "appium:chromedriverPort": ports.chromedriverPort,
     ...capabilityForApp(task.app)
   };
+
+  if (!capabilities["appium:appPackage"] || !capabilities["appium:appActivity"]) {
+    logs.push(`app package/activity not configured for ${task.app}; using current foreground app`);
+  }
 
   const logs = [];
   const assertions = [];

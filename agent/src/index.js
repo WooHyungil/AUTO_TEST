@@ -6,7 +6,7 @@ import { restartAdbServer, scanAndroidDeviceStates } from "./adbScanner.js";
 const API_BASE = process.env.API_BASE || "http://localhost:8001/api";
 const USERNAME = process.env.AGENT_USER || "local-agent";
 const POLL_MS = Number(process.env.POLL_MS || "4000");
-const EXECUTE_REAL = process.env.EXECUTE_REAL_APPIUM === "true";
+const EXECUTE_REAL = (process.env.EXECUTE_REAL_APPIUM || "true") === "true";
 const AGENT_PLATFORM = process.env.AGENT_PLATFORM || "android";
 const MAX_RETRY = Number(process.env.TASK_MAX_RETRY || "1");
 const RETRY_ON_TYPES = (process.env.RETRY_ON_TYPES || "connection_error,timeout,session_start_failed")
@@ -97,6 +97,7 @@ async function executeTask(task) {
         screenshotBase64 = result.screenshotBase64;
         pageSource = result.pageSource;
       } else {
+        logs = ["mock execution path (EXECUTE_REAL_APPIUM=false)"];
         await sleep(800);
         assertions = [
           {
@@ -118,7 +119,6 @@ async function executeTask(task) {
             passed: true
           }
         ];
-        logs = ["mock execution path"];
         pageSource = `<mock app='${task.app}' case='${task.case_id}'/>`;
       }
       lastError = null;
