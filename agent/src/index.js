@@ -1,9 +1,9 @@
 import axios from "axios";
 
 import { runAppiumTask } from "./appiumExecutor.js";
-import { scanConnectedAndroidDevices } from "./adbScanner.js";
+import { restartAdbServer, scanAndroidDeviceStates } from "./adbScanner.js";
 
-const API_BASE = process.env.API_BASE || "http://localhost:8000/api";
+const API_BASE = process.env.API_BASE || "http://localhost:8001/api";
 const USERNAME = process.env.AGENT_USER || "local-agent";
 const POLL_MS = Number(process.env.POLL_MS || "4000");
 const EXECUTE_REAL = process.env.EXECUTE_REAL_APPIUM === "true";
@@ -184,7 +184,22 @@ async function executeTask(task) {
 }
 
 async function syncDevices() {
-  const deviceIds = await scanConnectedAndroidDevices();
+  const scan = await scanAndroidDeviceStates();
+  if (scan.error) {
+    console.error(`[agent] adb scan error: ${scan.error}`);
+    return [];
+  }
+
+  const unauthorized = scan.statuses.filter((d) => d.state === "unauthorized").map((d) => d.id);
+  const offline = scan.statuses.filter((d) => d.state === "offline").map((d) => d.id);
+  if (unauthorized.length > 0) {
+    console.warn(`[agent] unauthorized devices: ${unauthorized.join(", ")} (폰에서 USB 디버깅 권한 허용 필요)`);
+  }
+  if (offline.length > 0) {
+    console.warn(`[agent] offline devices: ${offline.join(", ")} (케이블/adb 재연결 필요)`);
+  }
+
+  const deviceIds = scan.connected;
   for (const id of deviceIds) {
     await axios.post(`${API_BASE}/devices`, {
       id,
@@ -206,6 +221,13 @@ async function claimTask(deviceIds) {
 }
 
 async function bootstrap() {
+  console.log(`[agent] start user=${USERNAME} api=${API_BASE} platform=${AGENT_PLATFORM} real=${EXECUTE_REAL}`);
+
+  const adbRestart = await restartAdbServer();
+  if (!adbRestart.ok) {
+    console.warn(`[agent] adb restart failed: ${adbRestart.message}`);
+  }
+
   await axios.post(`${API_BASE}/auth/login`, {
     username: USERNAME,
     password: "agent-password"
