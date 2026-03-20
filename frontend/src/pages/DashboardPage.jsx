@@ -65,6 +65,9 @@ export function DashboardPage() {
     "wait:1500\ntap:accessibility=Login\nexpect:text=Welcome"
   );
   const [caseValidationErrors, setCaseValidationErrors] = useState([]);
+  const [manualDeviceId, setManualDeviceId] = useState("");
+  const [manualDeviceModel, setManualDeviceModel] = useState("android-device");
+  const [manualDeviceOs, setManualDeviceOs] = useState("unknown");
   const [aiCodeLanguage, setAiCodeLanguage] = useState("Python (Appium)");
   const [aiBehaviorText, setAiBehaviorText] = useState("앱 정가운데 로그인 버튼을 누른다.");
   const [aiExpectedText, setAiExpectedText] = useState("로그인 성공 후 Welcome 텍스트가 보여야 한다.");
@@ -707,6 +710,31 @@ export function DashboardPage() {
     await loadAll();
   }
 
+  async function handleRegisterDeviceManually() {
+    const deviceId = manualDeviceId.trim();
+    if (!deviceId) {
+      showToast("단말 ID를 입력해 주세요", "warn");
+      return;
+    }
+
+    await registerDevice({
+      id: deviceId,
+      model: manualDeviceModel.trim() || "android-device",
+      platform: "Android",
+      os_version: manualDeviceOs.trim() || "unknown",
+      connected_by: username || "manual-user"
+    });
+
+    setManualDeviceId("");
+    showToast("단말 수동 등록 완료", "success");
+    await loadAll();
+  }
+
+  async function handleRefreshDevices() {
+    await loadAll();
+    showToast("단말 목록 새로고침 완료", "success");
+  }
+
   function handleFocusTask(taskId) {
     setFocusedTaskId(taskId);
     const idx = filteredTaskDetails.findIndex((task) => task.id === taskId);
@@ -871,6 +899,36 @@ export function DashboardPage() {
           <button className="accent" onClick={handleStartRun}>
             실행 시작
           </button>
+        </div>
+        <div className="manual-device-box">
+          <strong>3단계가 대기일 때: 수동 단말 등록</strong>
+          <div className="hint">ADB가 불안정할 때 단말 ID를 직접 등록해 테스트를 진행할 수 있습니다.</div>
+          <div className="manual-device-grid">
+            <input
+              placeholder="단말 ID (예: emulator-5554)"
+              value={manualDeviceId}
+              onChange={(e) => setManualDeviceId(e.target.value)}
+            />
+            <input
+              placeholder="모델 (예: Galaxy S23)"
+              value={manualDeviceModel}
+              onChange={(e) => setManualDeviceModel(e.target.value)}
+            />
+            <input
+              placeholder="OS 버전 (예: Android 14)"
+              value={manualDeviceOs}
+              onChange={(e) => setManualDeviceOs(e.target.value)}
+            />
+          </div>
+          <div className="buttons onboarding-actions">
+            <button onClick={handleRegisterDeviceManually}>수동 등록</button>
+            <button onClick={handleRefreshDevices}>단말 목록 새로고침</button>
+          </div>
+          {devices.length === 0 && (
+            <div className="hint">
+              현재 등록 단말이 없습니다. 터미널에서 <strong>adb devices</strong> 결과를 확인해 주세요.
+            </div>
+          )}
         </div>
       </section>
 
