@@ -14,6 +14,20 @@ class TaskClaimRequest(BaseModel):
     device_ids: list[str]
 
 
+class AgentDeviceState(BaseModel):
+    id: str
+    state: str
+
+
+class AgentHeartbeatRequest(BaseModel):
+    agent_name: str
+    api_base: str
+    poll_ms: int
+    connected_devices: list[str] = []
+    device_states: list[AgentDeviceState] = []
+    adb_error: str | None = None
+
+
 class TaskReportRequest(BaseModel):
     status: str = Field(pattern="^(running|completed|failed)$")
     progress: int = Field(ge=0, le=100)
@@ -21,6 +35,25 @@ class TaskReportRequest(BaseModel):
     log_line: str | None = None
     screenshot_base64: str | None = None
     page_source: str | None = None
+
+
+@router.post("/heartbeat")
+async def heartbeat(body: AgentHeartbeatRequest) -> dict:
+    status = await store.update_agent_status(
+        agent_name=body.agent_name,
+        api_base=body.api_base,
+        poll_ms=body.poll_ms,
+        connected_devices=body.connected_devices,
+        device_states=[item.model_dump() for item in body.device_states],
+        adb_error=body.adb_error,
+    )
+    await store.broadcast("agent_heartbeat", status)
+    return {"ok": True, "status": status}
+
+
+@router.get("/status")
+async def agent_status() -> dict:
+    return await store.get_agent_status()
 
 
 @router.post("/tasks/claim")

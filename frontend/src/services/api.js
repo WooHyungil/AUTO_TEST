@@ -39,6 +39,11 @@ export async function fetchDevices() {
   return res.json();
 }
 
+export async function fetchAgentStatus() {
+  const res = await fetch(`${BASE_URL}/agents/status`);
+  return res.json();
+}
+
 export async function registerDevice(payload) {
   const res = await fetch(`${BASE_URL}/devices`, {
     method: "POST",

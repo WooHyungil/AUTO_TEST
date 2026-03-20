@@ -84,8 +84,43 @@ class InMemoryStore:
         self.devices: dict[str, Device] = {}
         self.test_runs: dict[str, TestRun] = {}
         self.tasks: dict[str, AgentTask] = {}
+        self.agent_status: dict[str, Any] = {
+            "agent_name": "",
+            "api_base": "",
+            "poll_ms": 0,
+            "last_seen": None,
+            "connected_devices": [],
+            "device_states": [],
+            "adb_error": None,
+        }
         self.active_connections: set[WebSocket] = set()
         self._lock = asyncio.Lock()
+
+    async def update_agent_status(
+        self,
+        *,
+        agent_name: str,
+        api_base: str,
+        poll_ms: int,
+        connected_devices: list[str],
+        device_states: list[dict[str, str]],
+        adb_error: str | None,
+    ) -> dict[str, Any]:
+        async with self._lock:
+            self.agent_status = {
+                "agent_name": agent_name,
+                "api_base": api_base,
+                "poll_ms": poll_ms,
+                "last_seen": datetime.utcnow().isoformat(),
+                "connected_devices": connected_devices,
+                "device_states": device_states,
+                "adb_error": adb_error,
+            }
+            return dict(self.agent_status)
+
+    async def get_agent_status(self) -> dict[str, Any]:
+        async with self._lock:
+            return dict(self.agent_status)
 
     async def connect(self, websocket: WebSocket) -> None:
         await websocket.accept()

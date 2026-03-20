@@ -182,6 +182,14 @@ label {
   padding: 10px;
 }
 
+.agent-diagnostic-box {
+  margin-top: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px;
+}
+
 .manual-device-grid {
   margin-top: 8px;
   display: grid;

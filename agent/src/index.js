@@ -55,6 +55,10 @@ async function reportTask(taskId, payload) {
   await axios.post(`${API_BASE}/agents/tasks/${taskId}/report`, payload);
 }
 
+async function reportHeartbeat(payload) {
+  await axios.post(`${API_BASE}/agents/heartbeat`, payload);
+}
+
 async function fetchCase(caseId) {
   const res = await axios.get(`${API_BASE}/cases/${caseId}`);
   return res.data;
@@ -209,6 +213,14 @@ async function syncDevices() {
       connected_by: USERNAME
     });
   }
+  await reportHeartbeat({
+    agent_name: USERNAME,
+    api_base: API_BASE,
+    poll_ms: POLL_MS,
+    connected_devices: deviceIds,
+    device_states: scan.statuses,
+    adb_error: scan.error,
+  });
   return deviceIds;
 }
 

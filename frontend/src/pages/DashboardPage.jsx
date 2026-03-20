@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   createCase,
   createRun,
+  fetchAgentStatus,
   fetchCases,
   fetchDevices,
   fetchQueueSummary,
@@ -65,6 +66,15 @@ export function DashboardPage() {
     "wait:1500\ntap:accessibility=Login\nexpect:text=Welcome"
   );
   const [caseValidationErrors, setCaseValidationErrors] = useState([]);
+  const [agentStatus, setAgentStatus] = useState({
+    agent_name: "",
+    api_base: "",
+    poll_ms: 0,
+    last_seen: null,
+    connected_devices: [],
+    device_states: [],
+    adb_error: null
+  });
   const [manualDeviceId, setManualDeviceId] = useState("");
   const [manualDeviceModel, setManualDeviceModel] = useState("android-device");
   const [manualDeviceOs, setManualDeviceOs] = useState("unknown");
@@ -154,18 +164,20 @@ export function DashboardPage() {
   };
 
   async function loadCore() {
-    const [sessionData, caseData, runData, deviceData, queueData] = await Promise.all([
+    const [sessionData, caseData, runData, deviceData, queueData, agentData] = await Promise.all([
       fetchSessions(),
       fetchCases(),
       fetchRuns(),
       fetchDevices(),
-      fetchQueueSummary()
+      fetchQueueSummary(),
+      fetchAgentStatus()
     ]);
     setSessions(sessionData);
     setCases(caseData);
     setRuns(runData);
     setDevices(deviceData);
     setQueueSummary(queueData);
+    setAgentStatus(agentData || {});
 
     return runData;
   }
@@ -382,6 +394,24 @@ export function DashboardPage() {
       }
     ];
   }, [sessions, cases, devices, runs]);
+
+  const agentStatusSummary = useMemo(() => {
+    const states = agentStatus?.device_states || [];
+    const connected = states.filter((item) => item.state === "device").length;
+    const unauthorized = states.filter((item) => item.state === "unauthorized").length;
+    const offline = states.filter((item) => item.state === "offline").length;
+    let message = "정상";
+    if (agentStatus?.adb_error) {
+      message = "ADB 오류";
+    } else if (unauthorized > 0) {
+      message = "권한 허용 필요";
+    } else if (offline > 0) {
+      message = "오프라인 단말 있음";
+    } else if (connected === 0) {
+      message = "연결 단말 없음";
+    }
+    return { connected, unauthorized, offline, message };
+  }, [agentStatus]);
 
   const filteredTaskDetails = useMemo(() => {
     return taskDetails.filter((task) => {
@@ -899,6 +929,29 @@ export function DashboardPage() {
           <button className="accent" onClick={handleStartRun}>
             실행 시작
           </button>
+        </div>
+        <div className="agent-diagnostic-box">
+          <strong>연결 진단</strong>
+          <div className="hint">
+            상태: {agentStatusSummary.message} | connected {agentStatusSummary.connected} / unauthorized {agentStatusSummary.unauthorized} /
+            offline {agentStatusSummary.offline}
+          </div>
+          <div className="hint">
+            agent: {agentStatus?.agent_name || "-"} | last_seen: {agentStatus?.last_seen || "-"}
+          </div>
+          {agentStatus?.adb_error && <div className="validation-error">ADB 오류: {agentStatus.adb_error}</div>}
+          {(agentStatus?.device_states || []).length > 0 && (
+            <ul>
+              {agentStatus.device_states.map((item) => (
+                <li key={`${item.id}-${item.state}`}>
+                  {item.id} - {item.state}
+                </li>
+              ))}
+            </ul>
+          )}
+          {agentStatusSummary.unauthorized > 0 && (
+            <div className="hint">휴대폰 화면에서 USB 디버깅 권한 허용 팝업을 승인하세요.</div>
+          )}
         </div>
         <div className="manual-device-box">
           <strong>3단계가 대기일 때: 수동 단말 등록</strong>
